@@ -1,56 +1,34 @@
-import React from "react";
-import './App.css';
+import React, { useState, useEffect } from "react";
+import "./App.css";
 import Die from "./Die";
 import { nanoid } from "nanoid";
 import Confetti from "react-confetti";
+import Popup from "./Popup";
+import useWindowSize from 'react-use/lib/useWindowSize';
 
 export default function App() {
-  const [dice, setDice] = React.useState(allNewDice());
-  const [tenzies, setTenzies] = React.useState(false);
-  const [rollCount, setRollCount] = React.useState(0);
-  const [startTime, setStartTime] = React.useState(null);
-  const [endTime, setEndTime] = React.useState(null);
-  const [bestTime, setBestTime] = React.useState(() => {
-    const storedBestTime = parseInt(localStorage.getItem("bestTime"));
-    return Number.isNaN(storedBestTime) ? null : storedBestTime;
-  });
+  const [dice, setDice] = useState(allNewDice());
+  const [tenzies, setTenzies] = useState(false);
+  const [rollCount, setRollCount] = useState(0);
+  const [isRolling, setIsRolling] = useState(false);
+  const [showClearTimePopup, setShowClearTimePopup] = useState(false);
+  const [showWinPopup, setShowWinPopup] = useState(false);
 
-  React.useEffect(() => {
-    const allHeld = dice.every((die) => die.isHeld);
+  useEffect(() => {
+    const allHeld = dice.every(die => die.isHeld);
     const firstValue = dice[0].value;
-    const allSameValue = dice.every((die) => die.value === firstValue);
-    if (allHeld && allSameValue && !tenzies && endTime === null) {
-        // Stop the timer when the player wins the game
-        setEndTime(new Date());
-        setTenzies(true);
-    }
-  }, [dice, endTime, tenzies]);
+    const allSameValue = dice.every(die => die.value === firstValue);
 
-    React.useEffect(() => {
-    if (tenzies && endTime !== null) {
-        // Calculate the elapsed time in milliseconds
-        const elapsedMilliseconds = endTime - startTime;
+    if (allHeld && allSameValue && !tenzies) {
+      setTenzies(true);
+      setShowWinPopup(true);
+    };
+  }, [dice, tenzies]);
 
-        // Check if it's a new best time
-        if (bestTime === null || elapsedMilliseconds < bestTime) {
-        setBestTime(elapsedMilliseconds);
-        storeBestTime(elapsedMilliseconds);
-        alert("Congratulations! You've achieved a new best time!");
-        }
-    }
-    }, [endTime, startTime, bestTime, tenzies]);
-
-    // function handleWin() {
-    //     // Calculate the elapsed time in milliseconds
-    //     const elapsedMilliseconds = endTime - startTime;
-
-    //     // Check if it's a new best time
-    //     if (bestTime === null || elapsedMilliseconds < bestTime) {
-    //         setBestTime(elapsedMilliseconds);
-    //         storeBestTime(elapsedMilliseconds);
-    //         alert("Congratulations! You've achieved a new best time!");
-    //     }
-    // }
+  useEffect(() => {
+    const heldDice = dice.filter(die => die.isHeld && die.hasOwnProperty('value'));
+    checkHeldDice(heldDice);
+  }, [dice]);
 
   function generateNewDie() {
     return {
@@ -58,7 +36,7 @@ export default function App() {
       isHeld: false,
       id: nanoid(),
     };
-  }
+  };
 
   function allNewDice() {
     const newDice = [];
@@ -66,88 +44,136 @@ export default function App() {
       newDice.push(generateNewDie());
     }
     return newDice;
-  }
+  };
 
   function rollDice() {
-      if (!tenzies) {
-        setDice((oldDice) =>
-        oldDice.map((die) => {
-            return die.isHeld ? die : generateNewDie();
-        })
-        );
-        setRollCount((prevRollCount) => prevRollCount + 1);
+    // Check if it's a new game or a roll
+    const isNewGame = tenzies;
 
-        // Start the timer when the first winning combination is achieved
-        if (!tenzies && endTime === null) {
-        setStartTime(new Date());
-        }
-    } else {
-        setTenzies(false);
-        setDice(allNewDice());
-        setRollCount(0);
-        setStartTime(null);
-        setEndTime(null);
+    // Check if at least one die is held
+    const isAnyDieHeld = dice.some(die => die.isHeld);
+
+    if (isNewGame && isAnyDieHeld) {
+      setRollCount(1);
+      setTenzies(false);
+      setDice(allNewDice());
+      setShowWinPopup(false);
+      setShowClearTimePopup(false);
+      setIsRolling(false);
+      return;
     }
-  }
+
+    // Update dice state
+    setDice(oldDice =>
+      oldDice.map(die => {
+        if (die.isHeld) return die;
+        return { ...die, isRolling: true, value: Math.ceil(Math.random() * 6) };
+      })
+    );
+
+    setRollCount(prevRollCount => (isNewGame ? 1 : prevRollCount + 1));
+    setTenzies(isNewGame ? false : tenzies);
+    setIsRolling(!isNewGame);
+
+    const allHeld = dice.every(die => die.isHeld);
+    const firstValue = dice[0].value;
+    const allSameValue = dice.every(die => die.value === firstValue);
+
+    if (allHeld && allSameValue && !tenzies) {
+      setTenzies(true);
+      setShowWinPopup(true);
+    };
+  };
+
+  function checkHeldDice(heldDice) {
+    if (heldDice.length === 0) {
+      setShowClearTimePopup(false); // Reset the popup if no dice are selected
+      return;
+    };
+
+    const firstValue = heldDice[0].value;
+    const allSameValue = heldDice.every(die => die.value === firstValue);
+    if (!allSameValue) {
+      setShowClearTimePopup(true);
+    } else {
+      setShowClearTimePopup(false);
+    };
+  };
 
   function holdDice(id) {
-    setDice((oldDice) =>
-      oldDice.map((die) => {
+    setDice(oldDice =>
+      oldDice.map(die => {
         return die.id === id ? { ...die, isHeld: !die.isHeld } : die;
       })
     );
-  }
+  };
 
-  function storeBestTime(timeInMilliseconds) {
-    localStorage.setItem("bestTime", timeInMilliseconds);
-  }
+  function handleDieHoldChange(isHeld, id) {
+    setDice(oldDice =>
+      oldDice.map(die => {
+        if (die.id === id) {
+          const updatedDie = { ...die, isHeld };
+          if (isHeld && !die.hasOwnProperty('value')) {
+            // Generate a random value for held dice if it doesn't have a value
+            updatedDie.value = Math.ceil(Math.random() * 6);
+          }
+          return updatedDie;
+        }
+        return die;
+      })
+    );
+  };
 
-  function clearBestTime() {
-    localStorage.removeItem("bestTime");
-    setBestTime(null);
-  }
-
-  // Calculate the elapsed time in milliseconds
-  const elapsedMilliseconds =
-    startTime !== null && endTime !== null ? endTime - startTime : null;
-
-  const diceElements = dice.map((die) => (
-    <Die
-      key={die.id}
-      value={die.value}
-      isHeld={die.isHeld}
-      holdDice={() => holdDice(die.id)}
-    />
-  ));
+  // For Confetti
+  const { width, height } = useWindowSize();
 
   return (
-    <main>
-      {tenzies && <Confetti />}
-      <h1 className="title">Tenzies</h1>
-      <p>Roll Count: {rollCount}</p>
-      {tenzies && elapsedMilliseconds !== null && (
-        <p>
-          Elapsed Time: {elapsedMilliseconds} {elapsedMilliseconds !== 1 ? "milliseconds" : "millisecond"}
-        </p>
+    <section>
+      {tenzies && (
+        <Confetti
+          width={width}
+          height={height}
+          numberOfPieces={700}
+        />
       )}
-      <p className="instructions">
-        Roll until all dice are the same. Click each die to freeze it at its current value between rolls.
-      </p>
-      {bestTime !== null ? (
-        <div className="time-container">
-            <p>
-            Best Time: {bestTime}{" "}
-            {bestTime !== 1 ? "milliseconds" : "millisecond"}
-            </p>
-            <button className="clear-time"  onClick={clearBestTime}>Clear Time</button>
-        </div>
-        ) : (
-        <p>Best Time: N/A</p>
+      <main>
+        <h1 className="title">Tenzies</h1>
+        <p>Roll Count: {rollCount}</p>
+        <p className="instructions">
+          Roll until all dice are the same. Click each die to freeze it at its current value between rolls.
+        </p>
+        {showClearTimePopup && (
+          <Popup
+            message="Warning: All held dice must have the same value!"
+            onClose={() => setShowClearTimePopup(false)}
+            style={{ color: "red" }}
+          />
         )}
-      <div className="dice-container">{diceElements}</div>
-      <button className="roll-dice" onClick={rollDice}>
-        {tenzies ? "New Game" : "Roll"}
-      </button>
-    </main>
+        {showWinPopup && (
+          <Popup
+            message="Yayyy!! You Won!!!🥳🥳"
+            onClose={() => setShowWinPopup(false)}
+            style={{ color: "#1cb026" }}
+          />
+        )}
+        <div className="dice-container">
+          {dice.map(die => (
+            <Die
+              key={die.id}
+              value={die.value}
+              isHeld={die.isHeld}
+              isRolling={isRolling && !die.isHeld}
+              holdDice={() => holdDice(die.id)}
+              onAnimationComplete={() => setIsRolling(false)}
+              onHoldChange={isHeld => handleDieHoldChange(isHeld, die.id)}
+            />
+          ))}
+        </div>
+        <button className="roll-dice" onClick={rollDice}>
+          {tenzies ? "New Game" : "Roll"}
+        </button>
+      </main>
+    </section>
   );
 }
+
