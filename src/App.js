@@ -173,6 +173,7 @@ export default function App() {
           {tenzies ? "New Game" : "Roll"}
         </button>
       </main>
+      <a href="https://github.com/sabbCodes/Tenzies-Game-App" className="gitHub">Source Code</a>
     </section>
   );
 }
